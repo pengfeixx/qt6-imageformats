@@ -69,11 +69,45 @@ qt_internal_extend_target(QTiffPlugin CONDITION NOT QT_FEATURE_system_tiff
         ../../../3rdparty/libtiff/libtiff/tif_warning.c
         ../../../3rdparty/libtiff/libtiff/tif_write.c
         ../../../3rdparty/libtiff/libtiff/tif_zip.c
+        ../../../3rdparty/libtiff/libtiff/t4.h
+        ../../../3rdparty/libtiff/libtiff/tiff.h
+        ../../../3rdparty/libtiff/libtiff/tif_config.h
+        ../../../3rdparty/libtiff/libtiff/tiffconf.h
+        ../../../3rdparty/libtiff/libtiff/tif_dir.h
+        ../../../3rdparty/libtiff/libtiff/tiffio.h
+        ../../../3rdparty/libtiff/libtiff/tif_fax3.h
+        ../../../3rdparty/libtiff/libtiff/tiffiop.h
+        ../../../3rdparty/libtiff/libtiff/tif_hash_set.h
+        ../../../3rdparty/libtiff/libtiff/tiffvers.h
+        ../../../3rdparty/libtiff/libtiff/tif_predict.h
+        ../../../3rdparty/libtiff/libtiff/uvcode.h
+
     INCLUDE_DIRECTORIES
         ../../../3rdparty/libtiff/libtiff
     ATTRIBUTION_FILE_DIR_PATHS
         ../../../3rdparty/libtiff
+    DEFINES
+        LOGLUV_PUBLIC=0
 )
+
+if(QT_FEATURE_jpeg AND NOT QT_FEATURE_system_tiff)
+    qt_find_package(WrapJpeg MODULE)
+    qt_internal_extend_target(QTiffPlugin
+        SOURCES
+            ../../../3rdparty/libtiff/libtiff/tif_jpeg.c
+        DEFINES
+            JPEG_SUPPORT=1
+        LIBRARIES
+            WrapJpeg::WrapJpeg
+    )
+    if(NOT QT_FEATURE_system_jpeg)
+        find_package(Qt6 COMPONENTS JpegPrivate)
+        qt_internal_extend_target(QTiffPlugin
+            LIBRARIES
+                Qt::JpegPrivate
+        )
+    endif()
+endif()
 
 qt_internal_extend_target(QTiffPlugin CONDITION WIN32 AND NOT QT_FEATURE_system_tiff
     SOURCES

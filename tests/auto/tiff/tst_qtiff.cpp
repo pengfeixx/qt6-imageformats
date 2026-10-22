@@ -24,6 +24,8 @@ private slots:
     void readCorruptImage_data();
     void readCorruptImage();
 
+    void readAfterFailedRead();
+
     void tiffCompression_data();
     void tiffCompression();
     void tiffEndianness();
@@ -41,6 +43,9 @@ private slots:
 
     void writeImage_data();
     void writeImage();
+
+    void writeImageWithCompression_data();
+    void writeImageWithCompression();
 
     void readWriteNonDestructive_data();
     void readWriteNonDestructive();
@@ -178,23 +183,67 @@ void tst_qtiff::readImage()
 void tst_qtiff::readCorruptImage_data()
 {
     QTest::addColumn<QString>("fileName");
-    QTest::addColumn<QString>("message");
+    QTest::addColumn<QByteArray>("message");
 
-    QTest::newRow("corrupt tiff") << QString("corrupt-data.tif") << QString();
+    QTest::newRow("corrupt tiff") << QString("corrupt-data.tif") << QByteArray();
 }
 
 void tst_qtiff::readCorruptImage()
 {
     QFETCH(QString, fileName);
-    QFETCH(QString, message);
+    QFETCH(const QByteArray, message);
 
     QString path = prefix + fileName;
     QImageReader reader(path);
     if (!message.isEmpty())
-        QTest::ignoreMessage(QtWarningMsg, message.toLatin1());
+        QTest::ignoreMessage(QtWarningMsg, message.data());
     QVERIFY(reader.canRead());
     QImage image = reader.read();
     QVERIFY(image.isNull());
+}
+
+void tst_qtiff::readAfterFailedRead()
+{
+    // multipage_corrupt.tiff is a 3-page 1x1 RGB image (red, green, blue) whose
+    // first page has a StripOffsets tag pointing past the end of the file. Every
+    // page's IFD is well-formed, so directory parsing (and thus imageCount() and
+    // readHeaders()) succeeds; only decoding the first page's pixels fails.
+    const QString fileName = prefix + "multipage_corrupt.tiff";
+
+    // The green and blue pages are intact and readable on their own.
+    {
+        QImageReader reader(fileName);
+        QVERIFY(reader.jumpToImage(1));
+        const QImage green = reader.read();
+        QVERIFY2(!green.isNull(), qPrintable(reader.errorString()));
+        QCOMPARE(green.pixel(0, 0), qRgb(0, 255, 0));
+    }
+    {
+        QImageReader reader(fileName);
+        QVERIFY(reader.jumpToImage(2));
+        const QImage blue = reader.read();
+        QVERIFY2(!blue.isNull(), qPrintable(reader.errorString()));
+        QCOMPARE(blue.pixel(0, 0), qRgb(0, 0, 255));
+    }
+
+    QImageReader reader(fileName);
+
+    // Counting the directories only parses the IFDs, not the image bodies, so it
+    // succeeds - and caches the directory count, which makes the jumpToImage()
+    // below a genuine no-op instead of a (failing) reopen.
+    QCOMPARE(reader.imageCount(), 3);
+
+    // The first read() reads the headers, then fails decoding the body, which
+    // closes the underlying TIFF handle.
+    QVERIFY(reader.read().isNull());
+
+    // Re-selecting the current image is a documented no-op: it must return true
+    // without resetting the cached headers.
+    QCOMPARE(reader.currentImageNumber(), 0);
+    QVERIFY(reader.jumpToImage(0));
+
+    // Next read() should fail (same as first one), but not crash:
+    QVERIFY(reader.read().isNull());
 }
 
 void tst_qtiff::tiffCompression_data()
@@ -366,6 +415,71 @@ void tst_qtiff::writeImage()
     } else {
         QCOMPARE(image.format(), image2.format());
         QCOMPARE(image.depth(), image2.depth());
+    }
+}
+
+void tst_qtiff::writeImageWithCompression_data()
+{
+    QTest::addColumn<QString>("fileName");
+    QTest::addColumn<int>("compression");
+
+    QTest::newRow("mono none") << QString("mono_compression_none.tiff") << 0;
+    QTest::newRow("mono lzw") << QString("mono_compression_lzw.tiff") << 1;
+    QTest::newRow("mono rle") << QString("mono_compression_rle.tiff") << 2;
+    QTest::newRow("mono group3") << QString("mono_compression_group3.tiff") << 3;
+    QTest::newRow("mono group4") << QString("mono_compression_group4.tiff") << 4;
+
+    QTest::newRow("rgb none") << QString("rgb_compression_none.tiff") << 0;
+    QTest::newRow("rgb lzw") << QString("rgb_compression_lzw.tiff") << 1;
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+    QTest::newRow("rgb jpeg") << QString("rgb_compression_jpeg.tiff") << 5;
+#endif
+
+    QTest::newRow("grayscale none") << QString("grayscale_compression_none.tiff") << 0;
+    QTest::newRow("grayscale lzw") << QString("grayscale_compression_lzw.tiff") << 1;
+#ifndef QT_NO_IMAGEFORMAT_JPEG
+    QTest::newRow("grayscale jpeg") << QString("grayscale_compression_jpeg.tiff") << 5;
+#endif
+
+    QTest::newRow("indexed none") << QString("indexed_compression_none.tiff") << 0;
+    QTest::newRow("indexed lzw") << QString("indexed_compression_lzw.tiff") << 1;
+}
+
+void tst_qtiff::writeImageWithCompression()
+{
+    QFETCH(QString, fileName);
+    QFETCH(int, compression);
+
+    QImage image;
+    {
+        QImageReader reader(prefix + fileName);
+        image = reader.read();
+        QVERIFY2(!image.isNull(), qPrintable(reader.errorString()));
+    }
+
+    QByteArray output;
+    {
+        QBuffer buf(&output);
+        QVERIFY(buf.open(QIODevice::WriteOnly));
+        QImageWriter writer(&buf, "tiff");
+        writer.setCompression(compression);
+        QVERIFY2(writer.write(image), qPrintable(writer.errorString()));
+    }
+
+    QImage image2;
+    {
+        QBuffer buf(&output);
+        QVERIFY(buf.open(QIODevice::ReadOnly));
+        QImageReader reader(&buf, "tiff");
+        image2 = reader.read();
+        QVERIFY2(!image2.isNull(), qPrintable(reader.errorString()));
+    }
+
+    if (compression == 5) {
+        QCOMPARE(image.format(), image2.format());
+        QCOMPARE(image.depth(), image2.depth());
+    } else {
+        QCOMPARE(image, image2);
     }
 }
 

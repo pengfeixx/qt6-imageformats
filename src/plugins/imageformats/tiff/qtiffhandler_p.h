@@ -1,5 +1,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 
 #ifndef QTIFFHANDLER_P_H
 #define QTIFFHANDLER_P_H
@@ -30,17 +32,18 @@ public:
     int imageCount() const override;
     int currentImageNumber() const override;
 
-    enum Compression {
-        NoCompression = 0,
-        LzwCompression = 1
+    enum class Compression {
+        None = 0,
+        Lzw = 1,
+        HuffmanRLE = 2,
+        Group3 = 3,
+        Group4 = 4,
+        Jpeg = 5
     };
 private:
-    void convert32BitOrder(void *buffer, int width);
-    void rgb48fixup(QImage *image, bool floatingPoint);
-    void rgb96fixup(QImage *image);
-    void rgbFixup(QImage *image);
     const QScopedPointer<QTiffHandlerPrivate> d;
     bool ensureHaveDirectoryCount() const;
+    int toLibTiffCompression(Compression compression) const;
 };
 
 QT_END_NAMESPACE

@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qwbmphandler_p.h"
 
@@ -262,15 +263,11 @@ bool QWbmpHandler::canRead() const
 */
 bool QWbmpHandler::read(QImage *image)
 {
-    bool bSuccess = false;
     QImage img = m_reader->readImage();
-
-    if (!img.isNull()) {
-        bSuccess = true;
-        *image = img;
-    }
-
-    return bSuccess;
+    if (img.isNull())
+        return false;
+    *image = std::move(img);
+    return true;
 }
 
 /*! \reimp

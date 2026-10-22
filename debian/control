@@ -1,23 +1,21 @@
 Source: qt6-imageformats
 Section: libs
-Priority: optional
 Maintainer: Debian Qt/KDE Maintainers <debian-qt-kde@lists.debian.org>
 Uploaders: Patrick Franz <deltaone@debian.org>,
-Build-Depends: cmake (>= 3.18~),
-               debhelper-compat (= 13),
+Build-Depends: debhelper-compat (= 13),
+               cmake (>= 3.24~),
                libgl-dev,
                libmng-dev,
                libtiff-dev,
                libwebp-dev,
                ninja-build,
-               pkg-config,
-               qt6-base-dev (>= 6.8.0+dfsg~),
-               qt6-base-private-dev (>= 6.8.0+dfsg~),
-Build-Depends-Indep: qt6-base-dev (>= 6.8~) <!nodoc>,
-                     qt6-documentation-tools (>= 6.8~) <!nodoc>,
-Standards-Version: 4.6.2
+               pkgconf,
+               qt6-base-dev (>= 6.11.2+dfsg~),
+               qt6-base-private-dev (>= 6.11.2+dfsg~),
+Build-Depends-Indep: qt6-base-dev (>= 6.11~) <!nodoc>,
+                     qt6-documentation-tools (>= 6.11~) <!nodoc>,
+Standards-Version: 4.7.4
 Homepage: https://www.qt.io/developers/
-Rules-Requires-Root: no
 Vcs-Git: https://salsa.debian.org/qt-kde-team/qt6/qt6-imageformats.git
 Vcs-Browser: https://salsa.debian.org/qt-kde-team/qt6/qt6-imageformats
 
@@ -33,6 +31,7 @@ Description: Qt 6 Image Formats plugins
  WBMP and WEBP image formats.
 
 Package: qt6-imageformats-doc
+Build-Profiles: <!nodoc>
 Architecture: all
 Section: doc
 Depends: qt6-base-doc, ${misc:Depends},
@@ -44,6 +43,7 @@ Description: Qt 6 image formats documentation
  This package contains the documentation for the Qt 6 image formats plugins.
 
 Package: qt6-imageformats-doc-html
+Build-Profiles: <!nodoc>
 Architecture: all
 Section: doc
 Depends: qt6-base-doc-html, ${misc:Depends},

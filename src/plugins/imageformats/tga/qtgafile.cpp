@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qtgafile.h"
 
@@ -7,6 +8,8 @@
 #include <QtCore/QDebug>
 #include <QtCore/QDateTime>
 #include <QtGui/QImageIOHandler>
+
+namespace {
 
 struct TgaReader
 {
@@ -58,6 +61,8 @@ struct Tga32Reader : public TgaReader
             return 0;
     }
 };
+
+} // namespace
 
 /*!
     \class QTgaFile
@@ -200,10 +205,6 @@ QImage QTgaFile::readImage()
 
     mDevice->seek(HeaderSize + offset);
 
-    char dummy;
-    for (int i = 0; i < offset; ++i)
-        mDevice->getChar(&dummy);
-
     int bitsPerPixel = mHeader[PixelDepth];
     int imageWidth = width();
     int imageHeight = height();
@@ -211,6 +212,12 @@ QImage QTgaFile::readImage()
     unsigned char desc = mHeader[ImageDescriptor];
     //unsigned char xCorner = desc & 0x10; // 0 = left, 1 = right
     unsigned char yCorner = desc & 0x20; // 0 = lower, 1 = upper
+
+    const qint64 pixelDataSize = qint64(imageWidth) * imageHeight * (bitsPerPixel / 8);
+    if (mDevice->size() > 0 && mDevice->size() - mDevice->pos() < pixelDataSize) {
+        mErrorMessage = tr("Insufficient image data for declared image size");
+        return {};
+    }
 
     QImage im;
     if (!QImageIOHandler::allocateImage(QSize(imageWidth, imageHeight), QImage::Format_ARGB32, &im))

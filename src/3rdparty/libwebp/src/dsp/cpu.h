@@ -50,13 +50,21 @@
 
 #if !defined(HAVE_CONFIG_H)
 #if defined(_MSC_VER) && _MSC_VER > 1310 && \
-    (defined(_M_X64) || defined(_M_IX86)) && !defined(__clang__)
+    (defined(_M_X64) || defined(_M_IX86)) && !defined(__clang__) && \
+    !defined(_M_ARM64EC)
 #define WEBP_MSC_SSE2  // Visual C++ SSE2 targets
 #endif
 
 #if defined(_MSC_VER) && _MSC_VER >= 1500 && \
-    (defined(_M_X64) || defined(_M_IX86)) && !defined(__clang__)
+    (defined(_M_X64) || defined(_M_IX86)) && !defined(__clang__) && \
+    !defined(_M_ARM64EC)
 #define WEBP_MSC_SSE41  // Visual C++ SSE4.1 targets
+#endif
+
+#if defined(_MSC_VER) && _MSC_VER >= 1700 && \
+    (defined(_M_X64) || defined(_M_IX86)) && !defined(__clang__) && \
+    !defined(_M_ARM64EC)
+#define WEBP_MSC_AVX2  // Visual C++ AVX2 targets
 #endif
 #endif
 
@@ -82,6 +90,16 @@
 #define WEBP_HAVE_SSE41
 #endif
 
+#if (defined(__AVX2__) || defined(WEBP_MSC_AVX2)) && \
+    (!defined(HAVE_CONFIG_H) || defined(WEBP_HAVE_AVX2))
+#define WEBP_USE_AVX2
+#endif
+
+#if defined(WEBP_USE_AVX2) && !defined(WEBP_HAVE_AVX2)
+#define WEBP_HAVE_AVX2
+#endif
+
+#undef WEBP_MSC_AVX2
 #undef WEBP_MSC_SSE41
 #undef WEBP_MSC_SSE2
 

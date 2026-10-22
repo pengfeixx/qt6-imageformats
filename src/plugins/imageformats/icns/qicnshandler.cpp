@@ -1,6 +1,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // Copyright (C) 2016 Alex Char.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qicnshandler_p.h"
 
@@ -323,8 +324,11 @@ static inline bool isPowOf2OrDividesBy16(quint32 u, qreal r)
 
 static inline bool isBlockHeaderValid(const ICNSBlockHeader &header, quint64 bound = 0)
 {
-    return header.ostype != 0 && (bound == 0
-                || qBound(quint64(ICNSBlockHeaderSize), quint64(header.length), bound) == header.length);
+    return header.ostype != 0 &&
+        (bound == 0 ||
+            // qBound can be used but requires checking the limits first
+            // this requires less operations
+            (ICNSBlockHeaderSize <= header.length && header.length <= bound));
 }
 
 static inline bool isIconCompressed(const ICNSEntry &icon)
@@ -583,6 +587,7 @@ static QImage read32bitIcon(const ICNSEntry &icon, QDataStream &stream)
             }
         }
     } else {
+        img.fill(Qt::black); // rle data may not cover all, ensure initialized
         const quint32 estPxsNum = icon.width * icon.height;
         const QByteArray &bytes = stream.device()->peek(4);
         if (bytes.isEmpty())
@@ -708,7 +713,8 @@ bool QICNSHandler::read(QImage *outImage)
         else if (icon.dataFormat == ICNSEntry::JP2)
             format = "jp2";
         // Even if JP2 or PNG magic is not detected, try anyway for unknown formats
-        img = QImage::fromData(device()->read(icon.dataLength), format);
+        if (qint64(icon.dataLength) <= device()->bytesAvailable())
+            img = QImage::fromData(device()->read(icon.dataLength), format);
         if (img.isNull()) {
             if (format == 0)
                 format = "unknown";
@@ -785,7 +791,7 @@ QVariant QICNSHandler::option(ImageOption option) const
         return QVariant();
 
     if (option == SubType) {
-        if (imageCount() > 0 && m_currentIconIndex <= imageCount()) {
+        if (imageCount() > 0 && m_currentIconIndex < imageCount()) {
             const ICNSEntry &icon = m_icons.at(m_currentIconIndex);
             if (icon.variant != 0)
                 return QByteArray(nameFromOSType(icon.variant) + '-' + nameFromOSType(icon.ostype));
@@ -869,7 +875,7 @@ bool QICNSHandler::scanDevice()
             return false;
 
         const qint64 blockDataOffset = device()->pos();
-        if (!isBlockHeaderValid(blockHeader, ICNSBlockHeaderSize + filelength - blockDataOffset)) {
+        if (!isBlockHeaderValid(blockHeader, ICNSBlockHeaderSize - blockDataOffset + filelength)) {
             qWarning("QICNSHandler::scanDevice(): Failed, bad header at pos %s. OSType \"%s\", length %u",
                      QByteArray::number(blockDataOffset).constData(),
                      nameFromOSType(blockHeader.ostype).constData(), blockHeader.length);
@@ -944,7 +950,8 @@ bool QICNSHandler::scanDevice()
             for (uint i = 0, count = blockDataLength / ICNSBlockHeaderSize; i < count; i++) {
                 ICNSBlockHeader tocEntry;
                 stream >> tocEntry;
-                if (!isBlockHeaderValid(tocEntry)) {
+                if (imgDataOffset > filelength
+                    || !isBlockHeaderValid(tocEntry, quint64(filelength - imgDataOffset))) {
                     // TOC contains incorrect header, we should skip TOC since we can't trust it
                     qWarning("QICNSHandler::scanDevice(): Warning! Table of contents contains a bad " \
                              "entry! Stop at device pos: %s bytes. This file may be corrupted.",

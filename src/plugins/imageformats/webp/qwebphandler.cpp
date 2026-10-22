@@ -1,5 +1,6 @@
 // Copyright (C) 2019 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qwebphandler_p.h"
 #include "webp/mux.h"
@@ -12,6 +13,8 @@
 #include <QtEndian>
 
 static const int riffHeaderSize = 12; // RIFF_HEADER_SIZE from webp/format_constants.h
+
+QT_BEGIN_NAMESPACE
 
 QWebpHandler::QWebpHandler() :
     m_quality(75),
@@ -93,8 +96,8 @@ bool QWebpHandler::ensureScanned() const
                 that->m_composited = new QImage;
                 if (!QImageIOHandler::allocateImage(sz, QImage::Format_ARGB32, that->m_composited))
                     return false;
-                if (that->m_features.has_alpha)
-                    that->m_composited->fill(Qt::transparent);
+                // Ensure whole image is initialized; anim frames may cover only partially
+                that->m_composited->fill(m_features.has_alpha ? QColor(Qt::transparent) : m_bgColor);
 
                 m_scanState = ScanSuccess;
             }
@@ -112,10 +115,14 @@ bool QWebpHandler::ensureDemuxer()
         return true;
 
     m_rawData = device()->readAll();
-    m_webpData.bytes = reinterpret_cast<const uint8_t *>(m_rawData.constData());
-    m_webpData.size = m_rawData.size();
 
-    m_demuxer = WebPDemux(&m_webpData);
+    m_demuxer = [&] {
+        WebPData data = {};
+        data.bytes = reinterpret_cast<const uint8_t *>(m_rawData.constData());
+        data.size = m_rawData.size();
+        return WebPDemux(&data); // reads `*data`, doesn't store `data`
+    }();
+
     if (m_demuxer == NULL)
         return false;
 
@@ -177,10 +184,7 @@ bool QWebpHandler::read(QImage *image)
 #endif
         return false;
 
-    if (!m_features.has_animation) {
-        // Single image
-        *image = frame;
-    } else {
+    if (m_features.has_animation) {
         // Animation
         QPainter painter(m_composited);
         if (!prevFrameRect.isEmpty()) {
@@ -196,6 +200,9 @@ bool QWebpHandler::read(QImage *image)
         painter.drawImage(currentImageRect(), frame);
 
         *image = *m_composited;
+    } else {
+        // Single image
+        *image = std::move(frame);
     }
     image->setColorSpace(m_colorSpace);
 
@@ -394,3 +401,5 @@ int QWebpHandler::nextImageDelay() const
 
     return m_iter.duration;
 }
+
+QT_END_NAMESPACE
